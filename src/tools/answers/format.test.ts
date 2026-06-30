@@ -3,9 +3,11 @@ import { describe, it } from 'node:test';
 import {
   extractResearchAnswer,
   formatAnswersContent,
+  FormatAnswersContentReason,
+  NO_USABLE_ANSWER_MESSAGE,
   INCOMPLETE_RESEARCH_MESSAGE,
-  replaceCitationBlocks,
-  replaceEnumItemBlocks,
+  markdownifyCitationBlocks,
+  markdownifyEnumBlocks,
 } from './format.js';
 
 describe('extractResearchAnswer', () => {
@@ -53,7 +55,15 @@ describe('formatAnswersContent', () => {
       { enable_research: true }
     );
 
-    assert.deepEqual(result, { ok: false, reason: 'incomplete_research' });
+    assert.deepEqual(result, { ok: false, reason: FormatAnswersContentReason.INCOMPLETE_RESEARCH });
+  });
+
+  it('flags no usable answer in single-search mode', () => {
+    const result = formatAnswersContent(' ' + '<usage>{"X-Request-Total-Cost":0}</usage>', {
+      enable_research: false,
+    });
+
+    assert.deepEqual(result, { ok: false, reason: FormatAnswersContentReason.NO_USABLE_ANSWER });
   });
 
   it('strips usage metadata from streamed single-search output', () => {
@@ -120,28 +130,32 @@ describe('INCOMPLETE_RESEARCH_MESSAGE', () => {
   });
 });
 
-describe('replaceCitationBlocks', () => {
-  it('returns the body text and array of citations when citations are present', () => {
-    const result = replaceCitationBlocks(
-      'Claim.<citation>{"number":1,"url":"https://a.com","snippet":"First."}</citation><citation>{"number":2,"url":"https://b.com"}</citation> More text.'
-    );
-
-    assert.deepEqual(result, {
-      body: 'Claim.[^1][^2] More text.',
-      citations: ['[^1]: [a.com](https://a.com) — First.', '[^2]: [b.com](https://b.com)'],
-    });
-  });
-
-  it('returns the body text and undefined when no citations are present', () => {
-    const result = replaceCitationBlocks('No citations.');
-
-    assert.deepEqual(result, { body: 'No citations.', citations: undefined });
+describe('NO_USABLE_ANSWER_MESSAGE', () => {
+  it('is a non-empty user-facing message', () => {
+    assert.ok(NO_USABLE_ANSWER_MESSAGE.length > 0);
   });
 });
 
-describe('replaceEnumItemBlocks', () => {
+describe('markdownifyCitationBlocks', () => {
+  it('appends footnote definitions after a blank line when citations are present', () => {
+    const result = markdownifyCitationBlocks(
+      'Claim.<citation>{"number":1,"url":"https://a.com","snippet":"First."}</citation><citation>{"number":2,"url":"https://b.com"}</citation> More text.'
+    );
+
+    assert.equal(
+      result,
+      'Claim.[^1][^2] More text.\n\n[^1]: [a.com](https://a.com) — First.\n[^2]: [b.com](https://b.com)'
+    );
+  });
+
+  it('returns the body unchanged when no citations are present', () => {
+    assert.equal(markdownifyCitationBlocks('No citations.'), 'No citations.');
+  });
+});
+
+describe('markdownifyEnumBlocks', () => {
   it('converts an unordered enum list container to markdown bullets', () => {
-    const result = replaceEnumItemBlocks(
+    const result = markdownifyEnumBlocks(
       'Albums:<enum_start>ul</enum_start><enum_item>{"original_tokens":"The Fame","href":"https://example.com/fame"}</enum_item><enum_end></enum_end>'
     );
 
@@ -149,7 +163,7 @@ describe('replaceEnumItemBlocks', () => {
   });
 
   it('converts an ordered enum list container to a numbered markdown list', () => {
-    const result = replaceEnumItemBlocks(
+    const result = markdownifyEnumBlocks(
       'Steps:<enum_start>ol</enum_start><enum_item>{"original_tokens":"First"}</enum_item><enum_item>{"original_tokens":"Second"}</enum_item><enum_end></enum_end>'
     );
 
@@ -157,7 +171,7 @@ describe('replaceEnumItemBlocks', () => {
   });
 
   it('converts standalone enum_item blocks as an unordered list', () => {
-    const result = replaceEnumItemBlocks(
+    const result = markdownifyEnumBlocks(
       'Albums:<enum_item>{"original_tokens":"The Fame"}</enum_item><enum_item>{"original_tokens":"Chromatica"}</enum_item>'
     );
 

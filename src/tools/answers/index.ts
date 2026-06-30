@@ -4,7 +4,12 @@ import { ZodError } from 'zod';
 import { issuePostRequest, issueStreamingPostRequest } from '../../BraveAPI/index.js';
 import { AnswersInputSchema, type AnswersInput } from './schemas/input.js';
 import type { ChatCompletionResponse } from './schemas/output.js';
-import { formatAnswersContent, INCOMPLETE_RESEARCH_MESSAGE } from './format.js';
+import {
+  formatAnswersContent,
+  FormatAnswersContentReason,
+  INCOMPLETE_RESEARCH_MESSAGE,
+  NO_USABLE_ANSWER_MESSAGE,
+} from './format.js';
 import {
   ANSWERS_PROGRESS_INTERVAL_MS,
   createAnswersProgressNotifier,
@@ -15,7 +20,6 @@ import { getAnswersStreamingTimeoutMs } from './timeout.js';
 export const name = 'brave_answers';
 
 const ANSWERS_PATH = '/res/v1/chat/completions';
-const EMPTY_ANSWER_MESSAGE = 'No answer content was returned by the Answers API.';
 
 export const annotations: ToolAnnotations = {
   title: 'Brave Answers',
@@ -77,23 +81,21 @@ export const execute = async (
     }
 
     const formatted = formatAnswersContent(rawText, {
-      enable_research: body.enable_research === true,
-      enable_citations: body.enable_citations === true,
-      enable_entities: body.enable_entities === true,
+      enable_research: body.enable_research,
+      enable_citations: body.enable_citations,
+      enable_entities: body.enable_entities,
     });
 
     if (!formatted.ok) {
-      let errorMessage = EMPTY_ANSWER_MESSAGE;
-
+      let errorMessage: string;
       switch (formatted.reason) {
-        case 'incomplete_research':
+        case FormatAnswersContentReason.INCOMPLETE_RESEARCH:
           errorMessage = INCOMPLETE_RESEARCH_MESSAGE;
           break;
-        case 'empty':
+        case FormatAnswersContentReason.NO_USABLE_ANSWER:
         default:
-          errorMessage = EMPTY_ANSWER_MESSAGE;
+          errorMessage = NO_USABLE_ANSWER_MESSAGE;
       }
-
       response.isError = true;
       response.content.push({ type: 'text', text: errorMessage });
       return response;

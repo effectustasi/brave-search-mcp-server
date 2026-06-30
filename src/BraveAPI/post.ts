@@ -1,24 +1,6 @@
 import { BASE_URL, buildErrorMessage, mergeRequestHeaders } from './request.js';
 import { consumeSseResponse } from './sse.js';
 
-export async function issuePostRequest<T>(
-  path: string,
-  body: unknown,
-  requestHeaders: Record<string, string> = {}
-): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: mergeRequestHeaders(requestHeaders, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(await buildErrorMessage(response));
-  }
-
-  return (await response.json()) as T;
-}
-
 export type StreamingPostRequestOptions = {
   timeoutMs?: number;
   /** Client cancellation signal (merged with the streaming timeout). */
@@ -89,4 +71,22 @@ export async function issueStreamingPostRequest(
       clearInterval(progressInterval);
     }
   }
+}
+
+export async function issuePostRequest<T>(
+  path: string,
+  body: unknown,
+  requestHeaders: Record<string, string> = {}
+): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: mergeRequestHeaders(requestHeaders, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(await buildErrorMessage(response));
+  }
+
+  return (await response.json()) as T;
 }
